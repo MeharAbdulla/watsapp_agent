@@ -13,7 +13,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import WebDriverException, TimeoutException
-from webdriver_manager.chrome import ChromeDriverManager
 
 # Import native local PDF parser library
 from pypdf import PdfReader
@@ -277,6 +276,24 @@ class WhatsAppBusinessBot:
         except Exception:
             pass
 
+    def _cleanup_stale_chrome_locks(self):
+        """Remove leftover Singleton lock files from a previous crashed Chrome.
+        Chrome refuses to start a profile when these exist, even though no
+        Chrome process is actually running."""
+        try:
+            if not os.path.isdir(self.chrome_data_dir):
+                return
+            for name in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
+                path = os.path.join(self.chrome_data_dir, name)
+                try:
+                    if os.path.islink(path) or os.path.isfile(path):
+                        os.remove(path)
+                        self.log("INIT", f"Removed stale lock: {name}")
+                except OSError:
+                    pass
+        except Exception as err:
+            self.log("WARN", f"Could not clean stale Chrome locks: {err}")
+
     def _chrome_failure_hint(self, err: str) -> str:
         """Map a chromedriver error to a likely root cause."""
         e = (err or "").lower()
@@ -354,16 +371,34 @@ class WhatsAppBusinessBot:
         }
         options.add_experimental_option("prefs", prefs)
 
+        self._cleanup_stale_chrome_locks()
+
         try:
             chrome_binary = (os.getenv("CHROME_BINARY") or "").strip()
             if chrome_binary:
                 options.binary_location = chrome_binary
                 self.log("INIT", f"Using Chrome binary: {chrome_binary}")
 
-            self.driver = webdriver.Chrome(
-                service=Service(ChromeDriverManager().install()),
-                options=options,
-            )
+            # Selenium 4.6+ ships Selenium Manager which auto-downloads the
+            # exact ChromeDriver matching the installed Chrome version. This
+            # avoids the chronic webdriver-manager version-mismatch crashes.
+            chromedriver_path = (os.getenv("CHROMEDRIVER_PATH") or "").strip()
+            if chromedriver_path:
+                self.log("INIT", f"Using ChromeDriver: {chromedriver_path}")
+                self.driver = webdriver.Chrome(
+                    service=Service(executable_path=chromedriver_path),
+                    options=options,
+                )
+            else:
+                self.driver = webdriver.Chrome(options=options)
+
+            try:
+                caps = getattr(self.driver, "capabilities", {}) or {}
+                cv = caps.get("browserVersion") or caps.get("version") or "?"
+                dv = (caps.get("chrome") or {}).get("chromedriverVersion", "?")
+                self.log("INIT", f"Chrome {cv} | ChromeDriver {dv.split(' ')[0]}")
+            except Exception:
+                pass
             self.wait = WebDriverWait(self.driver, 10)
             self.driver.get("https://web.whatsapp.com")
             self._emit("status", {"status": "qr_pending"})
