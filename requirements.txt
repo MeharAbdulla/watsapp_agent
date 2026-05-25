@@ -1,0 +1,18 @@
+# Core (WhatsApp bot + lightweight RAG)
+python-dotenv>=1.0.0
+selenium>=4.15.0
+pyperclip>=1.8.2
+webdriver-manager>=4.0.0
+pypdf>=4.0.0
+
+
+# Gemini API (embeddings + chat)
+google-generativeai>=0.8.0
+
+# Firebase Firestore (optional — set FIREBASE_CREDENTIALS in .env)
+firebase-admin>=6.4.0
+
+# SaaS API + dashboard
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic[email]>=2.5.0

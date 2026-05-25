@@ -1,0 +1,9 @@
+.env
+firebase-service-account.json
+*-firebase-adminsdk-*.json
+__pycache__/
+*.pyc
+chrome-data/
+tenants/*/chrome-data/
+saas.db
+*.log

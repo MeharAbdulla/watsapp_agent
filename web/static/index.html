@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgentCloud — WhatsApp AI Workspace</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+
+  <!-- AUTH SCREEN -->
+  <section id="panel-auth" class="auth-screen">
+    <div class="auth-bg"></div>
+    <div class="auth-content">
+      <div class="auth-brand">
+        <span class="logo-mark">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        </span>
+        <span>AgentCloud</span>
+      </div>
+
+      <div class="auth-card">
+
+
+        <h1 id="auth-title">Welcome back</h1>
+        <p class="auth-sub" id="auth-sub">Connect your WhatsApp and let the AI handle your conversations.</p>
+
+        <form id="auth-form" novalidate>
+          <div class="field">
+            <label for="input-email">Work email</label>
+            <input type="email" id="input-email" required placeholder="you@company.com" autocomplete="email" />
+          </div>
+          <div class="field">
+            <label for="input-password">Password</label>
+            <input type="password" id="input-password" required placeholder="••••••••" autocomplete="current-password" />
+          </div>
+          <button type="submit" class="btn btn-primary btn-block" id="auth-submit">
+            <span class="btn-label">Sign in</span>
+            <span class="spinner hidden"></span>
+          </button>
+        </form>
+
+        <p id="auth-error" class="form-error hidden"></p>
+
+        <div id="api-key-box" class="key-box hidden">
+          <div class="key-header">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="16" r="1"/><rect x="3" y="10" width="18" height="12" rx="2"/><path d="M7 10V7a5 5 0 0 1 10 0v3"/></svg>
+            <strong>Your API key</strong>
+          </div>
+          <p class="key-note">Save this somewhere safe — you'll need it to access this workspace.</p>
+          <code id="api-key-display"></code>
+          <div class="key-actions">
+            <button type="button" class="btn btn-ghost" id="btn-copy-key">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy key
+            </button>
+            <button type="button" class="btn btn-primary" id="btn-enter-dash">Open dashboard</button>
+          </div>
+        </div>
+      </div>
+
+      <p class="auth-foot">Local-first &middot; Gemini API &middot; Custom Flows</p>
+    </div>
+  </section>
+
+  <!-- ADMIN DASHBOARD (only visible to admin users) -->
+  <section id="panel-admin" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="logo-mark admin-mark">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </span>
+        <div>
+          <div class="brand-title">AgentCloud</div>
+          <div class="brand-sub">Admin Console</div>
+        </div>
+      </div>
+
+      <nav class="side-nav">
+        <button class="side-link active" data-admin-view="users">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>All Users</span>
+        </button>
+        <button class="side-link" data-admin-view="create">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          <span>Create User</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="user-card">
+          <div class="user-avatar admin-avatar" id="admin-avatar">A</div>
+          <div class="user-meta">
+            <div class="user-name" id="admin-name">Admin</div>
+            <div class="user-mail" id="admin-mail">—</div>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-block" id="btn-admin-logout">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sign out
+        </button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <h1 id="admin-view-title">All Users</h1>
+          <p id="admin-view-sub" class="topbar-sub">Manage every workspace and admin account from one place.</p>
+        </div>
+        <div class="topbar-actions">
+          <span class="status-chip admin-chip">
+            <span class="status-dot"></span>
+            <span class="status-text">Admin mode</span>
+          </span>
+        </div>
+      </header>
+
+      <!-- ADMIN: USERS LIST -->
+      <div class="view" data-admin-view="users">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2>Registered users</h2>
+              <p class="card-sub">All workspaces in your AgentCloud instance.</p>
+            </div>
+            <div class="topbar-actions" style="gap:.5rem;">
+              <button class="btn btn-ghost btn-sm" id="btn-admin-refresh">Refresh</button>
+              <button class="btn btn-primary btn-sm" id="btn-admin-goto-create">+ New user</button>
+            </div>
+          </div>
+
+          <div id="admin-users-wrap" class="admin-table-wrap">
+            <div class="admin-loading">Loading users…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADMIN: CREATE USER -->
+      <div class="view hidden" data-admin-view="create">
+        <div class="card admin-create-card">
+          <div class="card-header">
+            <div>
+              <h2>Create a new account</h2>
+              <p class="card-sub">Provision a workspace for a customer or invite another admin.</p>
+            </div>
+          </div>
+
+          <form id="admin-create-form" class="form-grid">
+            <div class="field">
+              <label for="admin-new-name">Business / display name</label>
+              <input type="text" id="admin-new-name" required placeholder="Acme Solutions" />
+            </div>
+            <div class="field">
+              <label for="admin-new-email">Email</label>
+              <input type="email" id="admin-new-email" required placeholder="user@company.com" />
+            </div>
+            <div class="field">
+              <label for="admin-new-password">Temporary password</label>
+              <input type="text" id="admin-new-password" required placeholder="At least 6 characters" minlength="6" />
+              <p class="field-help">Share this with the user — they'll use it to sign in.</p>
+            </div>
+            <div class="field">
+              <label class="checkbox-row">
+                <input type="checkbox" id="admin-new-is-admin" />
+                <span>Make this user an administrator</span>
+              </label>
+              <p class="field-help">Admins can manage all users. Normal users only see the WhatsApp bot dashboard.</p>
+            </div>
+            <div class="field field-full">
+              <button type="submit" class="btn btn-primary" id="admin-create-submit">
+                <span class="btn-label">Create account</span>
+                <span class="spinner hidden"></span>
+              </button>
+              <p id="admin-create-msg" class="form-error hidden"></p>
+            </div>
+          </form>
+        </div>
+      </div>
+    </main>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="panel-dash" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="logo-mark">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        </span>
+        <div>
+          <div class="brand-title">AgentCloud</div>
+          <div class="brand-sub">WhatsApp AI</div>
+        </div>
+      </div>
+
+      <nav class="side-nav">
+        <button class="side-link active" data-view="overview">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+          <span>Overview</span>
+        </button>
+        <button class="side-link" data-view="crm">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>CRM Leads</span>
+        </button>
+        <button class="side-link" data-view="agent">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          <span>Agent persona</span>
+        </button>
+        <button class="side-link" data-view="messages">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Messages</span>
+        </button>
+        <button class="side-link" data-view="knowledge">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          <span>Knowledge</span>
+        </button>
+        <button class="side-link" data-view="logs">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <span>Activity</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="user-card">
+          <div class="user-avatar" id="user-avatar">A</div>
+          <div class="user-meta">
+            <div class="user-name" id="user-name">Workspace</div>
+            <div class="user-mail" id="user-mail">—</div>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-block" id="btn-logout">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sign out
+        </button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <h1 id="view-title">Overview</h1>
+          <p id="view-sub" class="topbar-sub">Live status of your WhatsApp agent</p>
+        </div>
+        <div class="topbar-actions">
+          <span class="status-chip" id="status-chip">
+            <span class="status-dot"></span>
+            <span class="status-text">idle</span>
+          </span>
+
+        </div>
+      </header>
+
+      <!-- OVERVIEW -->
+      <div class="view" data-view="overview">
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-label">Agent status</div>
+            <div class="stat-value" id="stat-status">Idle</div>
+            <div class="stat-hint" id="stat-status-hint">Press start to launch your agent</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Database</div>
+            <div class="stat-value">Firebase</div>
+            <div class="stat-hint">Firestore Cloud Storage</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">AI engine</div>
+            <div class="stat-value">Gemini / Flow</div>
+            <div class="stat-hint">Customizable in Persona</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Reply style</div>
+            <div class="stat-value" id="stat-typing">Slow & human-like</div>
+            <div class="stat-hint">Customize in Agent persona</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h2>Link your WhatsApp</h2>
+                <p class="card-sub">Open WhatsApp on your phone &middot; Settings &rarr; Linked devices &rarr; Link a device</p>
+              </div>
+            </div>
+            <div class="qr-stage" id="qr-wrap">
+              <div class="qr-placeholder" id="qr-placeholder">
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="14" y1="14" x2="21" y2="14"/><line x1="17" y1="17" x2="21" y2="17"/><line x1="17" y1="17" x2="17" y2="21"/></svg>
+                <p>Press <strong>Start agent</strong> to generate your QR code.</p>
+              </div>
+              <img id="qr-image" class="hidden" alt="WhatsApp QR code" />
+            </div>
+            <div class="card-actions">
+              <button class="btn btn-primary" id="btn-start">
+                <span class="btn-label">Start agent</span>
+                <span class="spinner hidden"></span>
+              </button>
+              <button class="btn btn-danger-soft" id="btn-stop">Stop</button>
+            </div>
+            <p id="agent-hint" class="card-hint"></p>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h2>Recent activity</h2>
+                <p class="card-sub">Real-time events from your agent</p>
+              </div>
+              <button class="btn btn-ghost btn-sm" id="btn-clear-logs">Clear</button>
+            </div>
+            <div class="log-stream" id="logs">
+              <div class="log-empty">Logs will appear here once the agent starts.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CRM LEADS PIPELINE -->
+      <div class="view hidden" data-view="crm">
+        <div class="crm-workspace">
+          <!-- Left Sidebar: Leads List -->
+          <div class="crm-sidebar">
+            <div class="crm-sidebar-header">
+              <input type="text" id="crm-lead-search" placeholder="Search lead name/phone..." class="crm-search-input" />
+              <div class="crm-stage-filters">
+                <button class="crm-filter-btn active" data-filter="all">All</button>
+                <button class="crm-filter-btn" data-filter="New">New</button>
+                <button class="crm-filter-btn" data-filter="Contacted">Contacted</button>
+                <button class="crm-filter-btn" data-filter="In Progress">Progress</button>
+                <button class="crm-filter-btn" data-filter="Ordered">Ordered</button>
+                <button class="crm-filter-btn" data-filter="Closed">Closed</button>
+              </div>
+            </div>
+            <div class="crm-leads-list" id="crm-leads-list-container">
+              <div class="crm-loading">Loading leads pipeline...</div>
+            </div>
+          </div>
+
+          <!-- Right Workspace: Lead Details & Manual Action -->
+          <div class="crm-panel" id="crm-panel-container">
+            <div class="crm-empty-state">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <h3>No Lead Selected</h3>
+              <p>Select a customer from the pipeline list to view insights, conversation logs, and take over control.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AGENT PERSONA -->
+      <div class="view hidden" data-view="agent">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2>Agent persona</h2>
+              <p class="card-sub">Define how your AI agent introduces itself and replies to clients.</p>
+            </div>
+            <button class="btn btn-primary" id="btn-save-config-1">
+              <span class="btn-label">Save changes</span>
+              <span class="spinner hidden"></span>
+            </button>
+          </div>
+
+          <div class="form-grid">
+            <div class="field">
+              <label for="cfg-bot-mode">Bot Mode</label>
+              <select id="cfg-bot-mode">
+                <option value="gemini">Gemini API (AI Chat)</option>
+                <option value="flow">Custom Messages (Flow)</option>
+              </select>
+              <p class="field-help">Choose how the agent replies to messages.</p>
+            </div>
+            <div class="field">
+              <label for="cfg-business">Business name</label>
+              <input type="text" id="cfg-business" placeholder="Acme Solutions" />
+              <p class="field-help">Used in welcome and order messages.</p>
+            </div>
+            <div class="field">
+              <label for="cfg-typing">Reply speed</label>
+              <select id="cfg-typing">
+                <option value="slow">Slow & human-like (recommended)</option>
+                <option value="normal">Normal</option>
+              </select>
+              <p class="field-help">"Slow" types like a human with natural pauses.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MESSAGES -->
+      <div class="view hidden" data-view="messages">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2>Message templates</h2>
+              <p class="card-sub">Customize every reply your agent sends. Placeholders: <code class="inline-code">{service}</code> <code class="inline-code">{budget}</code> <code class="inline-code">{details}</code> <code class="inline-code">{max}</code> <code class="inline-code">{detail}</code> <code class="inline-code">{closing}</code></p>
+            </div>
+            <button class="btn btn-primary" id="btn-save-config-2">
+              <span class="btn-label">Save changes</span>
+              <span class="spinner hidden"></span>
+            </button>
+          </div>
+          <div id="cfg-messages" class="messages-list"></div>
+        </div>
+      </div>
+
+      <!-- KNOWLEDGE -->
+      <div class="view hidden" data-view="knowledge">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2>Knowledge base</h2>
+              <p class="card-sub">Used as System Instructions for Gemini API. Feed your agent the information it should know about your business.</p>
+            </div>
+            <button class="btn btn-primary" id="btn-save-config-3">
+              <span class="btn-label">Save changes</span>
+              <span class="spinner hidden"></span>
+            </button>
+          </div>
+
+          <div class="field">
+            <label for="cfg-services">Services menu</label>
+            <textarea id="cfg-services" rows="8" placeholder="- WhatsApp business automation&#10;- PDF document processing&#10;- Custom software and web development&#10;- IT consulting and technical support"></textarea>
+            <p class="field-help">One service per line, starting with <code class="inline-code">-</code>. These appear as numbered menu options to your clients.</p>
+          </div>
+
+          <div class="field">
+            <label for="cfg-knowledge">Business knowledge</label>
+            <textarea id="cfg-knowledge" rows="8" placeholder="Pricing: Starts at 50,000 PKR for a custom WhatsApp bot.&#10;Delivery: 2-4 weeks depending on complexity.&#10;Payment: 50% upfront, 50% on delivery.&#10;Support: 30 days free post-launch support."></textarea>
+            <p class="field-help">Pricing, FAQs, policies, examples. The agent uses this to answer client questions accurately.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- LOGS -->
+      <div class="view hidden" data-view="logs">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2>Activity log</h2>
+              <p class="card-sub">Full event stream from your agent.</p>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="btn-clear-logs-2">Clear log</button>
+          </div>
+          <div class="log-stream log-stream-tall" id="logs-full">
+            <div class="log-empty">Logs will appear here once the agent starts.</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </section>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
