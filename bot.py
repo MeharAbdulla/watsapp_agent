@@ -455,17 +455,76 @@ class WhatsAppBusinessBot:
                 return None
 
     def ensure_main_chat_list(self):
-        """Ensures the bot stays out of submenus and Archive listings entirely."""
+        """Force the side panel back to the main (non-archived) chat listing.
+        Detects the Archived view multiple ways: header text, header data-icon,
+        page title, archived banner. Repeatedly presses Escape + Back until we
+        leave it, so the monitor loop never iterates over archived rows."""
         try:
-            back_buttons = self.driver.find_elements(By.XPATH, '//button[@aria-label="Back"] | //span[@data-icon="back"]/ancestor::button')
-            if back_buttons:
-                archive_header = self.driver.find_elements(By.XPATH, '//div[text()="Archived"] | //h1[text()="Archived"] | //span[@title="Archived"]')
-                if archive_header:
-                    self.log("GUARD", "Detected Archive folder view! Forcefully breaking out to main listing panel...")
-                    back_buttons[0].click()
-                    time.sleep(1.5)
+            for _ in range(3):
+                if not self._is_in_archive_view():
+                    return
+                self.log("GUARD", "Inside Archived folder — escaping to main chat list…")
+                try:
+                    webdriver.ActionChains(self.driver).send_keys(Keys.ESCAPE).perform()
+                    time.sleep(0.3)
+                except Exception:
+                    pass
+                back_buttons = self.driver.find_elements(
+                    By.XPATH,
+                    '//header//button[@aria-label="Back"] | '
+                    '//header//span[@data-icon="back"]/ancestor::button | '
+                    '//header//div[@role="button"][.//span[@data-icon="back"]]'
+                )
+                if back_buttons:
+                    try:
+                        back_buttons[0].click()
+                    except Exception:
+                        try:
+                            self.driver.execute_script("arguments[0].click();", back_buttons[0])
+                        except Exception:
+                            pass
+                time.sleep(1.0)
         except Exception as e:
             self.log("GUARD_ERR", f"Failed routing validation frame checks: {e}")
+
+    def _is_in_archive_view(self) -> bool:
+        """True when the chat-list pane is currently showing the Archived folder."""
+        try:
+            archive_header = self.driver.find_elements(
+                By.XPATH,
+                '//header//*[normalize-space(text())="Archived"] | '
+                '//header//*[@title="Archived"] | '
+                '//header//span[contains(translate(text(),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"archived")]'
+            )
+            if archive_header:
+                return True
+            banner = self.driver.find_elements(
+                By.XPATH,
+                '//div[contains(@class,"_archive") and contains(translate(text(),"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"archived")]'
+            )
+            if banner:
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _is_archive_folder_row(self, chat_element) -> bool:
+        """True if a chat-list row is the 'Archived' folder shortcut, not a real chat."""
+        try:
+            if chat_element.find_elements(By.XPATH, './/span[@data-icon="archived-filled-refreshed"] | .//span[@data-icon="archived"] | .//span[@data-icon="archive"]'):
+                return True
+            aria = (chat_element.get_attribute("aria-label") or "").lower()
+            if aria.startswith("archived") or "archived chats" in aria:
+                return True
+            try:
+                row_text = (chat_element.text or "").strip().lower()
+            except Exception:
+                row_text = ""
+            if row_text == "archived" or row_text.startswith("archived\n") or row_text.startswith("archived "):
+                return True
+        except Exception:
+            pass
+        return False
 
     def open_chat_by_name(self, chat_name):
         """Finds and clicks a chat in the sidebar, or uses the search bar if not visible."""
@@ -475,6 +534,8 @@ class WhatsAppBusinessBot:
         )
         for chat in chats:
             try:
+                if self._is_archive_folder_row(chat):
+                    continue
                 name_el = chat.find_element(By.XPATH, './/span[@dir="auto"] | .//span[contains(@class, "title")]')
                 if name_el.text.strip().lower() == chat_name.lower():
                     chat.click()
@@ -544,8 +605,10 @@ class WhatsAppBusinessBot:
             local_history.ingest_message(self.tenant_id, chat_name, ai_reply, role="assistant")
 
     def is_row_an_archive_button(self, chat_name):
-        """Prevents the bot from accidentally clicking the 'Archived' folder header row item."""
-        return "archived" in chat_name.lower()
+        """Legacy text-only fallback for the 'Archived' folder header row.
+        Use _is_archive_folder_row(element) for the strong DOM-aware check."""
+        n = (chat_name or "").strip().lower()
+        return n == "archived" or n.startswith("archived ") or n.startswith("archived\n")
 
     def clear_unread_status(self):
         """Forces the current focused room context to drop target focus state to reset badging."""
@@ -825,12 +888,19 @@ class WhatsAppBusinessBot:
                 self.log("SYSTEM_ERROR", f"Failed reloading states: {reload_err}")
         self.ensure_main_chat_list()
 
+        if self._is_in_archive_view():
+            self.log("GUARD", "Still inside Archived view after escape — skipping this scan cycle.")
+            return
+
         chats = self.driver.find_elements(
             By.XPATH, '//div[@role="listitem"] | //div[contains(@class, "_ak8l")] | //div[@data-testid="cell-frame-container"]'
         )
 
         for chat in chats:
             try:
+                if self._is_archive_folder_row(chat):
+                    continue
+
                 unread_indicators = chat.find_elements(
                     By.XPATH, 
                     './/span[@aria-label[contains(., "unread")]] | '
@@ -860,6 +930,12 @@ class WhatsAppBusinessBot:
                     self.log("SKIP", f"Chat panel did not load for '{chat_name}'.")
                     self.clear_unread_status()
                     continue
+
+                if self._is_in_archive_view():
+                    self.log("GUARD", f"Click on '{chat_name}' opened Archived view — backing out without processing.")
+                    self.ensure_main_chat_list()
+                    continue
+
                 time.sleep(random.uniform(1.0, 1.8))
 
                 # Group Header Metadata Filter Validation Check
