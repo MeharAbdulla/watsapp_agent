@@ -276,6 +276,66 @@ class WhatsAppBusinessBot:
         except Exception:
             pass
 
+    def _find_real_chrome_binary(self) -> str:
+        """Return the real Chrome ELF binary path.
+
+        On Ubuntu/AWS, 'google-chrome' is a shell-script wrapper at
+        /usr/bin/google-chrome. Selenium needs the actual ELF binary
+        (e.g. /opt/google/chrome/chrome). This method resolves it by:
+          1. Checking known real-binary locations first.
+          2. Falling back to following symlinks on the wrapper script.
+          3. Returning empty string if nothing works (let Selenium auto-detect).
+        """
+        import shutil as _shutil
+        import subprocess
+
+        # Known real binary paths (checked in order of preference)
+        candidates = [
+            "/opt/google/chrome/chrome",
+            "/opt/google/chrome/google-chrome",
+            "/usr/lib/chromium-browser/chromium-browser",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/chromium",
+            "/snap/bin/chromium",
+        ]
+
+        for path in candidates:
+            if os.path.isfile(path) and os.access(path, os.X_OK):
+                try:
+                    out = subprocess.check_output([path, "--version"], stderr=subprocess.STDOUT, timeout=5).decode().strip()
+                    self.log("INIT", f"Resolved real Chrome binary: {path} ({out})")
+                    return path
+                except Exception:
+                    continue
+
+        # Try resolving the wrapper symlink
+        for wrapper in ("google-chrome", "google-chrome-stable"):
+            wrapper_path = _shutil.which(wrapper)
+            if not wrapper_path:
+                continue
+            try:
+                real = os.path.realpath(wrapper_path)
+                if real != wrapper_path and os.path.isfile(real) and os.access(real, os.X_OK):
+                    self.log("INIT", f"Resolved Chrome via symlink: {real}")
+                    return real
+            except Exception:
+                pass
+            # If the wrapper is a shell script, grep for the actual binary inside it
+            try:
+                with open(wrapper_path, "r", encoding="utf-8", errors="ignore") as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if line.startswith("exec ") or "google-chrome" in line or "/chrome" in line:
+                            for token in line.split():
+                                token = token.strip('"\'')
+                                if token.startswith("/") and os.path.isfile(token) and os.access(token, os.X_OK):
+                                    self.log("INIT", f"Resolved Chrome from wrapper script: {token}")
+                                    return token
+            except Exception:
+                pass
+
+        return ""
+
     def _cleanup_stale_chrome_locks(self):
         """Remove leftover Singleton lock files from a previous crashed Chrome.
         Chrome refuses to start a profile when these exist, even though no
@@ -375,6 +435,8 @@ class WhatsAppBusinessBot:
 
         try:
             chrome_binary = (os.getenv("CHROME_BINARY") or "").strip()
+            if not chrome_binary:
+                chrome_binary = self._find_real_chrome_binary()
             if chrome_binary:
                 options.binary_location = chrome_binary
                 self.log("INIT", f"Using Chrome binary: {chrome_binary}")
