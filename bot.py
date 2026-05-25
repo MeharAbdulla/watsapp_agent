@@ -232,6 +232,71 @@ class WhatsAppBusinessBot:
         profile = get_typing_profile(self.agent_config.get("typing_profile", "slow"))
         self._typing = profile
 
+    def _log_runtime_environment(self):
+        """Print diagnostic info that helps debug Chrome failures on Linux servers."""
+        import platform
+        import shutil as _shutil
+        import subprocess
+
+        try:
+            self.log("ENV", f"OS: {platform.system()} {platform.release()} | Python: {platform.python_version()}")
+        except Exception:
+            pass
+
+        for binary in ("google-chrome", "google-chrome-stable", "chromium-browser", "chromium"):
+            path = _shutil.which(binary)
+            if path:
+                try:
+                    out = subprocess.check_output([path, "--version"], stderr=subprocess.STDOUT, timeout=5).decode().strip()
+                    self.log("ENV", f"Chrome found: {path} ({out})")
+                except Exception as err:
+                    self.log("WARN", f"Chrome at {path} failed --version: {err}")
+                break
+        else:
+            self.log("WARN", "No google-chrome / chromium binary on PATH (run: which google-chrome).")
+
+        try:
+            usage = _shutil.disk_usage("/dev/shm" if os.path.isdir("/dev/shm") else os.path.dirname(self.chrome_data_dir) or ".")
+            self.log("ENV", f"/dev/shm or workdir free: {usage.free // (1024*1024)} MiB")
+        except Exception:
+            pass
+
+        try:
+            if os.path.isfile("/proc/meminfo"):
+                with open("/proc/meminfo", "r", encoding="utf-8") as fh:
+                    for line in fh:
+                        if line.startswith("MemAvailable:"):
+                            self.log("ENV", f"Memory available: {line.split()[1]} KiB")
+                            break
+        except Exception:
+            pass
+
+        try:
+            if not os.access(self.chrome_data_dir, os.W_OK):
+                self.log("WARN", f"user-data-dir not writable: {self.chrome_data_dir}")
+        except Exception:
+            pass
+
+    def _chrome_failure_hint(self, err: str) -> str:
+        """Map a chromedriver error to a likely root cause."""
+        e = (err or "").lower()
+        if "chrome instance exited" in e or "session not created" in e:
+            return (
+                "Chrome started but immediately died. Most common causes on Linux servers: "
+                "(1) Chrome is not installed (run: 'google-chrome --version'). "
+                "(2) Missing system libraries — install: libnss3, libgbm-dev, libasound2, "
+                "fonts-liberation, libxss1, libappindicator3-1. "
+                "(3) Out of RAM — free -h; instance needs >=1.5 GB free. "
+                "(4) /dev/shm too small — already mitigated by --disable-dev-shm-usage. "
+                "(5) Running as root without --no-sandbox (already added). "
+                "(6) Wrong Chrome/ChromeDriver versions — delete ~/.wdm and retry to re-download driver."
+            )
+        if "executable needs to be in path" in e or "no such file" in e:
+            return "google-chrome binary not found. Install with: sudo apt install -y google-chrome-stable"
+        if "permission denied" in e:
+            return f"Permission denied. Check ownership of: {self.chrome_data_dir}"
+        return ""
+
     def _emit(self, event: str, data: dict):
         if self.on_event:
             try:
@@ -247,6 +312,7 @@ class WhatsAppBusinessBot:
 
     def initialize_webdriver(self, wait_for_login=True):
         """Initializes Chrome for WhatsApp Web (per-tenant profile)."""
+        self._log_runtime_environment()
         self.log("INIT", "Launching Chrome for WhatsApp Web...")
         options = Options()
         if self.headless:
@@ -254,11 +320,31 @@ class WhatsAppBusinessBot:
             options.add_argument("--window-size=1280,900")
         else:
             options.add_argument("--start-maximized")
-        options.add_argument("--disable-dev-shm-usage")
+
+        # Linux/server hardening — these are required to keep Chrome alive on
+        # headless cloud instances (EC2, GCP, Docker, etc.). Safe on Windows too.
         options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--disable-software-rasterizer")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-background-networking")
+        options.add_argument("--disable-features=Translate,VizDisplayCompositor")
+        options.add_argument("--disable-renderer-backgrounding")
+        options.add_argument("--disable-background-timer-throttling")
+        options.add_argument("--disable-backgrounding-occluded-windows")
+        options.add_argument("--no-first-run")
+        options.add_argument("--no-default-browser-check")
+        options.add_argument("--remote-debugging-port=0")
         options.add_argument(f"--user-data-dir={self.chrome_data_dir}")
         if not self.managed:
             options.add_experimental_option("detach", True)
+
+        # Allow override / extra flags via env var, e.g. CHROME_EXTRA_FLAGS="--proxy-server=..."
+        extra_flags = (os.getenv("CHROME_EXTRA_FLAGS") or "").strip()
+        if extra_flags:
+            for flag in extra_flags.split():
+                options.add_argument(flag)
 
         prefs = {
             "download.default_directory": self.download_dir,
@@ -269,6 +355,11 @@ class WhatsAppBusinessBot:
         options.add_experimental_option("prefs", prefs)
 
         try:
+            chrome_binary = (os.getenv("CHROME_BINARY") or "").strip()
+            if chrome_binary:
+                options.binary_location = chrome_binary
+                self.log("INIT", f"Using Chrome binary: {chrome_binary}")
+
             self.driver = webdriver.Chrome(
                 service=Service(ChromeDriverManager().install()),
                 options=options,
@@ -288,8 +379,11 @@ class WhatsAppBusinessBot:
                 else:
                     self.log("INIT", "Waiting for QR scan...")
         except Exception as e:
+            hint = self._chrome_failure_hint(str(e))
             self.log("CRITICAL", f"Failed to initialize browser: {e}")
-            self._emit("status", {"status": "error", "message": str(e)})
+            if hint:
+                self.log("HINT", hint)
+            self._emit("status", {"status": "error", "message": str(e), "hint": hint})
             raise e
 
     def is_logged_in(self) -> bool:
